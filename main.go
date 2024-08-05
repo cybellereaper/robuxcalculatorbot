@@ -72,7 +72,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Description: fmt.Sprintf("**Conversion Type:** %s\n**Amount of Robux:** %d", priceType, amount),
 		Color:       0x00FF00, // Green color
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Gamepass Price", Value: fmt.Sprintf("%d R$", gamepassPrice), Inline: true},
+			{Name: "Gamepass Price", Value: fmt.Sprintf("%d R$", gamepassPrice+1), Inline: true},
 			{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
 			{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", usdAmount), Inline: true},
 		},
