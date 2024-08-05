@@ -12,8 +12,8 @@ import (
 
 // Constants
 const (
-	ExchangeRate = 1.2195 // GBP to USD exchange rate
-	MarkupRate   = 0.30   // 30% markup rate for 'a/t' type
+	ExchangeRate = 1.22 // GBP to USD exchange rate (1 GBP = 1.22 USD)
+	MarkupRate   = 0.30 // 30% markup rate for 'a/t' type
 )
 
 // PriceType represents the type of Robux price calculation
@@ -53,10 +53,18 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	gbpAmount := float64(amount) * rate
-	if priceType == AT {
-		gbpAmount += gbpAmount * MarkupRate
+	var gbpAmount float64
+	var gamepassPrice int64
+
+	if priceType == BT {
+		gbpAmount = float64(amount) * rate
+		gamepassPrice = amount
+	} else {
+		// For 'a/t', we include the 30% markup
+		gbpAmount = float64(amount) * rate
+		gamepassPrice = int64(math.Round(float64(amount) / (1 - MarkupRate)))
 	}
+
 	usdAmount := ConvertGBPToUSD(gbpAmount)
 
 	embed := &discordgo.MessageEmbed{
@@ -64,6 +72,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Description: fmt.Sprintf("**Conversion Type:** %s\n**Amount of Robux:** %d", priceType, amount),
 		Color:       0x00FF00, // Green color
 		Fields: []*discordgo.MessageEmbedField{
+			{Name: "Gamepass Price", Value: fmt.Sprintf("%d R$", gamepassPrice), Inline: true},
 			{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
 			{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", usdAmount), Inline: true},
 		},
