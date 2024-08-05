@@ -12,8 +12,8 @@ import (
 
 // Constants
 const (
-	ExchangeRate = 1.22 // GBP to USD exchange rate (1 GBP = 1.22 USD)
-	MarkupRate   = 0.30 // 30% markup rate for 'a/t' type
+	ExchangeRate = 1.22 // GBP to USD exchange rate
+	MarkupRate   = 0.30 // 30% markup for 'a/t' type
 )
 
 // PriceType represents the type of Robux price calculation
@@ -24,15 +24,15 @@ const (
 	AT PriceType = "a/t"
 )
 
-// PricePerRobux stores the price per Robux for different types
+// PricePerRobux maps PriceType to GBP per Robux
 var PricePerRobux = map[PriceType]float64{
-	BT: 0.0045,  // GBP per Robux for b/t
-	AT: 0.00675, // GBP per Robux for a/t
+	BT: 0.0045,  // GBP per Robux for 'b/t'
+	AT: 0.00675, // GBP per Robux for 'a/t'
 }
 
-// ConvertGBPToUSD converts GBP to USD
-func ConvertGBPToUSD(gbpAmount float64) float64 {
-	return gbpAmount * ExchangeRate
+// ConvertGBPToUSD converts GBP to USD using the exchange rate
+func ConvertGBPToUSD(gbp float64) float64 {
+	return gbp * ExchangeRate
 }
 
 // HandleInteraction processes Discord slash commands
@@ -53,28 +53,20 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 
-	var gbpAmount float64
-	var gamepassPrice int64
-
-	if priceType == BT {
-		gbpAmount = float64(amount) * rate
-		gamepassPrice = amount
-	} else {
-		// For 'a/t', we include the 30% markup
-		gbpAmount = float64(amount) * rate
+	gbpAmount := float64(amount) * rate
+	gamepassPrice := amount
+	if priceType == AT {
 		gamepassPrice = int64(math.Round(float64(amount) / (1 - MarkupRate)))
 	}
-
-	usdAmount := ConvertGBPToUSD(gbpAmount)
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "Price Calculation",
 		Description: fmt.Sprintf("**Conversion Type:** %s\n**Amount of Robux:** %d", priceType, amount),
-		Color:       0x00FF00, // Green color
+		Color:       0x5f9ea9, // Green
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Gamepass Price", Value: fmt.Sprintf("%d R$", gamepassPrice+1), Inline: true},
+			{Name: "Gamepass Price", Value: fmt.Sprintf("%d R$", gamepassPrice), Inline: true},
 			{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
-			{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", usdAmount), Inline: true},
+			{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", ConvertGBPToUSD(gbpAmount)), Inline: true},
 		},
 		Footer: &discordgo.MessageEmbedFooter{Text: "Powered by your friendly Discord bot"},
 	}
@@ -92,14 +84,9 @@ func ParseCommandOptions(options []*discordgo.ApplicationCommandInteractionDataO
 	if len(options) < 2 {
 		return "", 0, fmt.Errorf("insufficient command options")
 	}
-
 	priceType := PriceType(options[0].StringValue())
 	amount, err := parseAmount(options[1].Value)
-	if err != nil {
-		return "", 0, err
-	}
-
-	return priceType, amount, nil
+	return priceType, amount, err
 }
 
 // parseAmount converts value to int64
@@ -164,7 +151,7 @@ func RegisterSlashCommands(dg *discordgo.Session) error {
 			{
 				Type:        discordgo.ApplicationCommandOptionString,
 				Name:        "type",
-				Description: "The type of conversion (b/t or a/t)",
+				Description: "Conversion type (b/t or a/t)",
 				Required:    true,
 				Choices: []*discordgo.ApplicationCommandOptionChoice{
 					{Name: "b/t", Value: "b/t"},
@@ -174,7 +161,7 @@ func RegisterSlashCommands(dg *discordgo.Session) error {
 			{
 				Type:        discordgo.ApplicationCommandOptionInteger,
 				Name:        "amount",
-				Description: "The amount of Robux",
+				Description: "Amount of Robux",
 				Required:    true,
 			},
 		},

@@ -1,0 +1,26 @@
+{
+    "title": "Price Calculation",
+    "description": "**Conversion Type:** {type}\n**Amount of Robux:** {amount}",
+    "color": 65280,
+    "fields": [
+      {
+        "name": "Gamepass Price",
+        "value": "{gamepass_price} R$",
+        "inline": true
+      },
+      {
+        "name": "Amount in GBP",
+        "value": "£{gbp_amount}",
+        "inline": true
+      },
+      {
+        "name": "Amount in USD",
+        "value": "$ {usd_amount}",
+        "inline": true
+      }
+    ],
+    "footer": {
+      "text": "Powered by your friendly Discord bot"
+    }
+  }
+  
