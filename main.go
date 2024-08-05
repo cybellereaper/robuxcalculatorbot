@@ -68,7 +68,7 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
 			{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", ConvertGBPToUSD(gbpAmount)), Inline: true},
 		},
-		Footer: &discordgo.MessageEmbedFooter{Text: "Powered by Zenith", IconURL: "https://cdn.discordapp.com/icons/1209285252195811338/a_8742b19870a3c7437064c3737db4fc42.webp?size=96"},
+		Footer: &discordgo.MessageEmbedFooter{Text: "Powered by Zenith"},
 	}
 
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
