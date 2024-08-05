@@ -35,25 +35,20 @@ func ConvertGBPToUSD(gbpAmount float64) float64 {
 	return gbpAmount * ExchangeRate
 }
 
-// HandleInteraction handles Discord slash commands
+// HandleInteraction processes Discord slash commands
 func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.Type != discordgo.InteractionApplicationCommand {
+	if i.Type != discordgo.InteractionApplicationCommand || i.ApplicationCommandData().Name != "price" {
 		return
 	}
 
-	data := i.ApplicationCommandData()
-	if data.Name != "price" {
-		return
-	}
-
-	priceType, amount, err := ParseCommandOptions(data.Options)
+	priceType, amount, err := ParseCommandOptions(i.ApplicationCommandData().Options)
 	if err != nil {
 		RespondWithError(s, i.Interaction, fmt.Sprintf("Error: %v", err))
 		return
 	}
 
-	rate, ok := PricePerRobux[priceType]
-	if !ok {
+	rate, exists := PricePerRobux[priceType]
+	if !exists {
 		RespondWithError(s, i.Interaction, "Invalid type. Use 'b/t' or 'a/t'.")
 		return
 	}
@@ -64,71 +59,63 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	usdAmount := ConvertGBPToUSD(gbpAmount)
 
-	// Create an embed for the response
 	embed := &discordgo.MessageEmbed{
 		Title:       "Price Calculation",
 		Description: fmt.Sprintf("**Conversion Type:** %s\n**Amount of Robux:** %d", priceType, amount),
 		Color:       0x00FF00, // Green color
 		Fields: []*discordgo.MessageEmbedField{
-			{
-				Name:   "Amount in GBP",
-				Value:  fmt.Sprintf("£%.2f", gbpAmount),
-				Inline: true,
-			},
-			{
-				Name:   "Amount in USD",
-				Value:  fmt.Sprintf("$%.2f", usdAmount),
-				Inline: true,
-			},
+			{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
+			{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", usdAmount), Inline: true},
 		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Powered by your friendly Discord bot",
-		},
+		Footer: &discordgo.MessageEmbedFooter{Text: "Powered by your friendly Discord bot"},
 	}
 
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{embed},
-		},
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
 	}); err != nil {
 		log.Printf("Failed to send response: %v", err)
 	}
 }
 
-// ParseCommandOptions parses the command options from the interaction data
+// ParseCommandOptions extracts PriceType and amount from interaction options
 func ParseCommandOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (PriceType, int64, error) {
 	if len(options) < 2 {
 		return "", 0, fmt.Errorf("insufficient command options")
 	}
 
 	priceType := PriceType(options[0].StringValue())
-
-	var amount int64
-	switch v := options[1].Value.(type) {
-	case int64:
-		amount = v
-	case float64:
-		amount = int64(math.Round(v))
-	default:
-		return "", 0, fmt.Errorf("failed to parse amount: unexpected type %T", options[1].Value)
+	amount, err := parseAmount(options[1].Value)
+	if err != nil {
+		return "", 0, err
 	}
 
 	return priceType, amount, nil
+}
+
+// parseAmount converts value to int64
+func parseAmount(value interface{}) (int64, error) {
+	switch v := value.(type) {
+	case int64:
+		return v, nil
+	case float64:
+		return int64(math.Round(v)), nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T for amount", value)
+	}
 }
 
 // RespondWithError sends an error message as a response to the interaction
 func RespondWithError(s *discordgo.Session, interaction *discordgo.Interaction, message string) {
 	if err := s.InteractionRespond(interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: message,
-		},
+		Data: &discordgo.InteractionResponseData{Content: message},
 	}); err != nil {
 		log.Printf("Failed to send error response: %v", err)
 	}
 }
 
+// main initializes the bot, registers commands, and starts listening
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
