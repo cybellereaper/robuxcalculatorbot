@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/joho/godotenv"
 )
 
 // Constants
@@ -117,10 +116,6 @@ func RespondWithError(s *discordgo.Session, interaction *discordgo.Interaction, 
 
 // main initializes the bot, registers commands, and starts listening
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
-
 	token := os.Getenv("DISCORD_TOKEN")
 	if token == "" {
 		log.Fatal("DISCORD_TOKEN environment variable is required")
