@@ -56,7 +56,8 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gbpAmount := float64(amount) * rate
 	gamepassPrice := amount
 	if priceType == AT {
-		gamepassPrice = int64(math.Round(float64(amount) / (1 - MarkupRate)))
+		// Add 1 Robux to the gamepass price for 'a/t'
+		gamepassPrice = int64(math.Round(float64(amount)/(1-MarkupRate))) + 1
 	}
 	botUser := s.State.User
 	embed := &discordgo.MessageEmbed{
@@ -68,7 +69,10 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
 			{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", ConvertGBPToUSD(gbpAmount)), Inline: true},
 		},
-		Footer: &discordgo.MessageEmbedFooter{Text: fmt.Sprint("Powered by ", botUser.Username), IconURL: botUser.AvatarURL("2048")},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    fmt.Sprint("Powered by ", botUser.Username),
+			IconURL: botUser.AvatarURL("2048"),
+		},
 	}
 
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
