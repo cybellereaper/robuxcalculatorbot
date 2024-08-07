@@ -86,7 +86,7 @@ func handleHelpCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		"`/convert`: Convert between GBP and USD\n"+
 		"`/robux`: Convert GBP or USD to the amount of Robux", s.State.User)
 
-	sendEmbedResponse(s, i.Interaction, embed)
+	sendEphemeralEmbedResponse(s, i.Interaction, embed)
 }
 
 func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -211,9 +211,21 @@ func createEmbed(title, description string, botUser *discordgo.User) *discordgo.
 func sendEmbedResponse(s *discordgo.Session, interaction *discordgo.Interaction, embed *discordgo.MessageEmbed) {
 	if err := s.InteractionRespond(interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Flags: 64},
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
 	}); err != nil {
 		log.Printf("Failed to send response: %v", err)
+	}
+}
+
+func sendEphemeralEmbedResponse(s *discordgo.Session, interaction *discordgo.Interaction, embed *discordgo.MessageEmbed) {
+	if err := s.InteractionRespond(interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{embed},
+			Flags:  64, // Set the Ephemeral flag
+		},
+	}); err != nil {
+		log.Printf("Failed to send ephemeral response: %v", err)
 	}
 }
 
