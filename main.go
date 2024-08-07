@@ -211,7 +211,7 @@ func createEmbed(title, description string, botUser *discordgo.User) *discordgo.
 func sendEmbedResponse(s *discordgo.Session, interaction *discordgo.Interaction, embed *discordgo.MessageEmbed) {
 	if err := s.InteractionRespond(interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Flags: 64},
 	}); err != nil {
 		log.Printf("Failed to send response: %v", err)
 	}
