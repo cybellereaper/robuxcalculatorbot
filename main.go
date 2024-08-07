@@ -48,6 +48,8 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		go handleConvertCommand(s, i)
 	case "robux":
 		go handleRobuxCommand(s, i)
+	case "help":
+		go handleHelpCommand(s, i)
 	}
 }
 
@@ -78,6 +80,15 @@ func handlePriceCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	sendEmbedResponse(s, i.Interaction, embed)
 }
 
+func handleHelpCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	embed := createEmbed("Available Commands", "Here are the available commands and their usage:\n"+
+		"`/price`: Calculate the price in GBP and USD for a given amount of Robux\n"+
+		"`/convert`: Convert between GBP and USD\n"+
+		"`/robux`: Convert GBP or USD to the amount of Robux", s.State.User)
+
+	sendEmbedResponse(s, i.Interaction, embed)
+}
+
 func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
 	if len(options) < 2 {
@@ -94,8 +105,9 @@ func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	case "GBP":
 		convertedAmount := ConvertGBPToUSD(amount)
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:  "Amount in GBP",
-			Value: fmt.Sprintf("£%.2f", amount),
+			Name:   "Amount in GBP",
+			Inline: true,
+			Value:  fmt.Sprintf("£%.2f", amount),
 		}, &discordgo.MessageEmbedField{
 			Name:   "Amount in USD",
 			Inline: true,
@@ -103,14 +115,17 @@ func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		})
 	case "USD":
 		convertedAmount := ConvertUSDToGBP(amount)
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:  "Amount in GBP",
-			Value: fmt.Sprintf("£%.2f", convertedAmount),
-		}, &discordgo.MessageEmbedField{
-			Name:   "Amount in USD",
-			Inline: true,
-			Value:  fmt.Sprintf("$%.2f", amount),
-		})
+		embed.Fields = append(embed.Fields,
+			&discordgo.MessageEmbedField{
+				Name:   "Amount in USD",
+				Inline: true,
+				Value:  fmt.Sprintf("$%.2f", amount),
+			},
+			&discordgo.MessageEmbedField{
+				Name:   "Amount in GBP",
+				Inline: true,
+				Value:  fmt.Sprintf("£%.2f", convertedAmount),
+			})
 	default:
 		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
 		return
@@ -242,6 +257,10 @@ func main() {
 // RegisterSlashCommands registers the slash commands for the bot
 func RegisterSlashCommands(dg *discordgo.Session) error {
 	commands := []*discordgo.ApplicationCommand{
+		{
+			Name:        "help",
+			Description: "Display the available commands and their usage",
+		},
 		{
 			Name:        "price",
 			Description: "Calculate the price in GBP and USD for a given amount of Robux",
