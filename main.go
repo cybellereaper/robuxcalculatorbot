@@ -34,12 +34,25 @@ func ConvertGBPToUSD(gbp float64) float64 {
 	return gbp * ExchangeRate
 }
 
-// HandleInteraction processes Discord slash commands
-func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.Type != discordgo.InteractionApplicationCommand || i.ApplicationCommandData().Name != "price" {
-		return
-	}
+// ConvertUSDToGBP converts USD to GBP using the exchange rate
+func ConvertUSDToGBP(usd float64) float64 {
+	return usd / ExchangeRate
+}
 
+// HandleInteraction processes Discord slash commands
+// HandleInteraction processes Discord slash commands concurrently
+func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	switch i.ApplicationCommandData().Name {
+	case "price":
+		go handlePriceCommand(s, i)
+	case "convert":
+		go handleConvertCommand(s, i)
+	case "robux":
+		go handleRobuxCommand(s, i)
+	}
+}
+
+func handlePriceCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	priceType, amount, err := ParseCommandOptions(i.ApplicationCommandData().Options)
 	if err != nil {
 		RespondWithError(s, i.Interaction, fmt.Sprintf("Error: %v", err))
@@ -77,6 +90,73 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
+	}); err != nil {
+		log.Printf("Failed to send response: %v", err)
+	}
+}
+
+func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	if len(options) < 2 {
+		RespondWithError(s, i.Interaction, "Insufficient command options")
+		return
+	}
+
+	currency := options[0].StringValue()
+	amount := options[1].FloatValue()
+
+	var convertedAmount float64
+	var result string
+
+	switch currency {
+	case "GBP":
+		convertedAmount = ConvertGBPToUSD(amount)
+		result = fmt.Sprintf("£%.2f is equivalent to $%.2f", amount, convertedAmount)
+	case "USD":
+		convertedAmount = ConvertUSDToGBP(amount)
+		result = fmt.Sprintf("$%.2f is equivalent to £%.2f", amount, convertedAmount)
+	default:
+		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
+		return
+	}
+
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Content: result},
+	}); err != nil {
+		log.Printf("Failed to send response: %v", err)
+	}
+}
+
+func handleRobuxCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	if len(options) < 2 {
+		RespondWithError(s, i.Interaction, "Insufficient command options")
+		return
+	}
+
+	currency := options[0].StringValue()
+	amount := options[1].FloatValue()
+
+	var robuxAmount int64
+	var result string
+
+	switch currency {
+	case "GBP":
+		robuxAmount = int64(amount / PricePerRobux[BT])
+		result = fmt.Sprintf("£%.2f can buy %d Robux (approx. $%.2f)", amount, robuxAmount, ConvertGBPToUSD(amount))
+	case "USD":
+		gbpAmount := ConvertUSDToGBP(amount)
+		robuxAmount = int64(gbpAmount / PricePerRobux[BT])
+		result = fmt.Sprintf("$%.2f can buy %d Robux (approx. £%.2f)", amount, robuxAmount, gbpAmount)
+	default:
+		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
+		return
+	}
+
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Content: result},
 	}); err != nil {
 		log.Printf("Failed to send response: %v", err)
 	}
@@ -143,27 +223,80 @@ func main() {
 
 // RegisterSlashCommands registers the slash commands for the bot
 func RegisterSlashCommands(dg *discordgo.Session) error {
-	_, err := dg.ApplicationCommandCreate(dg.State.User.ID, "", &discordgo.ApplicationCommand{
-		Name:        "price",
-		Description: "Calculate the price in GBP and USD for a given amount of Robux",
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "type",
-				Description: "Conversion type (b/t or a/t)",
-				Required:    true,
-				Choices: []*discordgo.ApplicationCommandOptionChoice{
-					{Name: "b/t", Value: "b/t"},
-					{Name: "a/t", Value: "a/t"},
+	commands := []*discordgo.ApplicationCommand{
+		{
+			Name:        "price",
+			Description: "Calculate the price in GBP and USD for a given amount of Robux",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "type",
+					Description: "Conversion type (b/t or a/t)",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "b/t", Value: "b/t"},
+						{Name: "a/t", Value: "a/t"},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "amount",
+					Description: "Amount of Robux",
+					Required:    true,
 				},
 			},
-			{
-				Type:        discordgo.ApplicationCommandOptionInteger,
-				Name:        "amount",
-				Description: "Amount of Robux",
-				Required:    true,
+		},
+		{
+			Name:        "convert",
+			Description: "Convert between GBP and USD",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "currency",
+					Description: "Currency to convert from (GBP or USD)",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "GBP", Value: "GBP"},
+						{Name: "USD", Value: "USD"},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionNumber,
+					Name:        "amount",
+					Description: "Amount to convert",
+					Required:    true,
+				},
 			},
 		},
-	})
-	return err
+		{
+			Name:        "robux",
+			Description: "Convert GBP or USD to the amount of Robux",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "currency",
+					Description: "Currency to convert from (GBP or USD)",
+					Required:    true,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{Name: "GBP", Value: "GBP"},
+						{Name: "USD", Value: "USD"},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionNumber,
+					Name:        "amount",
+					Description: "Amount to convert",
+					Required:    true,
+				},
+			},
+		},
+	}
+
+	for _, cmd := range commands {
+		_, err := dg.ApplicationCommandCreate(dg.State.User.ID, "", cmd)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
