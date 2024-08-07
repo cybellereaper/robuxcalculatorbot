@@ -105,16 +105,40 @@ func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	currency := options[0].StringValue()
 	amount := options[1].FloatValue()
 
-	var convertedAmount float64
-	var result string
+	botUser := s.State.User
+	embed := &discordgo.MessageEmbed{
+		Color: 0x5f9ea9,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    fmt.Sprint("Powered by ", botUser.Username),
+			IconURL: botUser.AvatarURL("2048"),
+		},
+	}
 
 	switch currency {
 	case "GBP":
-		convertedAmount = ConvertGBPToUSD(amount)
-		result = fmt.Sprintf("£%.2f is equivalent to $%.2f", amount, convertedAmount)
+		convertedAmount := ConvertGBPToUSD(amount)
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  "Amount in GBP",
+			Value: fmt.Sprintf("£%.2f", amount),
+		},
+			&discordgo.MessageEmbedField{
+				Name:   "Amount in USD",
+				Inline: true,
+				Value:  fmt.Sprintf("$%.2f", convertedAmount),
+			},
+		)
 	case "USD":
-		convertedAmount = ConvertUSDToGBP(amount)
-		result = fmt.Sprintf("$%.2f is equivalent to £%.2f", amount, convertedAmount)
+		convertedAmount := ConvertUSDToGBP(amount)
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:  "Amount in GBP",
+			Value: fmt.Sprintf("£%.2f", convertedAmount),
+		},
+			&discordgo.MessageEmbedField{
+				Name:   "Amount in USD",
+				Inline: true,
+				Value:  fmt.Sprintf("$%.2f", amount),
+			},
+		)
 	default:
 		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
 		return
@@ -122,7 +146,7 @@ func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Content: result},
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
 	}); err != nil {
 		log.Printf("Failed to send response: %v", err)
 	}
@@ -139,16 +163,24 @@ func handleRobuxCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	amount := options[1].FloatValue()
 
 	var robuxAmount int64
-	var result string
+	botUser := s.State.User
+	embed := &discordgo.MessageEmbed{
+		Title: "Robux Calculation",
+		Color: 0x5f9ea9,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    fmt.Sprint("Powered by ", botUser.Username),
+			IconURL: botUser.AvatarURL("2048"),
+		},
+	}
 
 	switch currency {
 	case "GBP":
 		robuxAmount = int64(amount / PricePerRobux[BT])
-		result = fmt.Sprintf("£%.2f can buy %d Robux (approx. $%.2f)", amount, robuxAmount, ConvertGBPToUSD(amount))
+		embed.Description = fmt.Sprintf("£%.2f can buy %d Robux (approx. $%.2f)", amount, robuxAmount, ConvertGBPToUSD(amount))
 	case "USD":
 		gbpAmount := ConvertUSDToGBP(amount)
 		robuxAmount = int64(gbpAmount / PricePerRobux[BT])
-		result = fmt.Sprintf("$%.2f can buy %d Robux (approx. £%.2f)", amount, robuxAmount, gbpAmount)
+		embed.Description = fmt.Sprintf("$%.2f can buy %d Robux (approx. £%.2f)", amount, robuxAmount, gbpAmount)
 	default:
 		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
 		return
@@ -156,7 +188,7 @@ func handleRobuxCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Content: result},
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
 	}); err != nil {
 		log.Printf("Failed to send response: %v", err)
 	}
