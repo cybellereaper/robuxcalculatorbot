@@ -134,7 +134,6 @@ func handleRobuxCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch currency {
 	case "GBP":
 		robuxAmount := int64(amount / PricePerRobux[BT])
-		// £4.50 affords 1000 R$ ($??.??)
 		embed.Description = fmt.Sprintf("£%.2f affords %d R$ ($%.2f)", amount, robuxAmount, ConvertGBPToUSD(amount))
 
 	case "USD":
@@ -150,6 +149,7 @@ func handleRobuxCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	sendEmbedResponse(s, i.Interaction, embed)
 }
 
+// ParseCommandOptions parses the command options and returns the price type and amount
 func ParseCommandOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (PriceType, int64, error) {
 	if len(options) < 2 {
 		return "", 0, fmt.Errorf("insufficient command options")
@@ -184,7 +184,7 @@ func createEmbed(title, description string, botUser *discordgo.User) *discordgo.
 	return &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
-		Color:       0x5f9ea9,
+		Color:       0x0096FF,
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    fmt.Sprint("Powered by ", botUser.Username),
 			IconURL: botUser.AvatarURL("2048"),
