@@ -39,7 +39,6 @@ func ConvertUSDToGBP(usd float64) float64 {
 	return usd / ExchangeRate
 }
 
-// HandleInteraction processes Discord slash commands
 // HandleInteraction processes Discord slash commands concurrently
 func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.ApplicationCommandData().Name {
@@ -66,33 +65,17 @@ func handlePriceCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 
 	gbpAmount := float64(amount) * rate
-	gamepassPrice := amount
-	if priceType == AT {
-		// Add 1 Robux to the gamepass price for 'a/t'
-		gamepassPrice = int64(math.Round(float64(amount)/(1-MarkupRate))) + 1
-	}
+	gamepassPrice := calculateGamepassPrice(priceType, amount)
 	botUser := s.State.User
-	embed := &discordgo.MessageEmbed{
-		Title:       "Price Calculation",
-		Description: fmt.Sprintf("**Conversion Type:** %s\n**Amount of Robux:** %d", priceType, amount),
-		Color:       0x5f9ea9, // Green
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Gamepass Price", Value: fmt.Sprintf("%d R$", gamepassPrice), Inline: true},
-			{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
-			{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", ConvertGBPToUSD(gbpAmount)), Inline: true},
-		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text:    fmt.Sprint("Powered by ", botUser.Username),
-			IconURL: botUser.AvatarURL("2048"),
-		},
+
+	embed := createEmbed("Price Calculation", fmt.Sprintf("**Conversion Type:** %s\n**Amount of Robux:** %d", priceType, amount), botUser)
+	embed.Fields = []*discordgo.MessageEmbedField{
+		{Name: "Gamepass Price", Value: fmt.Sprintf("%d R$", gamepassPrice), Inline: true},
+		{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
+		{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", ConvertGBPToUSD(gbpAmount)), Inline: true},
 	}
 
-	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
-	}); err != nil {
-		log.Printf("Failed to send response: %v", err)
-	}
+	sendEmbedResponse(s, i.Interaction, embed)
 }
 
 func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -104,52 +87,36 @@ func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 	currency := options[0].StringValue()
 	amount := options[1].FloatValue()
-
 	botUser := s.State.User
-	embed := &discordgo.MessageEmbed{
-		Color: 0x5f9ea9,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text:    fmt.Sprint("Powered by ", botUser.Username),
-			IconURL: botUser.AvatarURL("2048"),
-		},
-	}
 
+	embed := createEmbed("Currency Conversion", "", botUser)
 	switch currency {
 	case "GBP":
 		convertedAmount := ConvertGBPToUSD(amount)
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:  "Amount in GBP",
 			Value: fmt.Sprintf("£%.2f", amount),
-		},
-			&discordgo.MessageEmbedField{
-				Name:   "Amount in USD",
-				Inline: true,
-				Value:  fmt.Sprintf("$%.2f", convertedAmount),
-			},
-		)
+		}, &discordgo.MessageEmbedField{
+			Name:   "Amount in USD",
+			Inline: true,
+			Value:  fmt.Sprintf("$%.2f", convertedAmount),
+		})
 	case "USD":
 		convertedAmount := ConvertUSDToGBP(amount)
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:  "Amount in GBP",
 			Value: fmt.Sprintf("£%.2f", convertedAmount),
-		},
-			&discordgo.MessageEmbedField{
-				Name:   "Amount in USD",
-				Inline: true,
-				Value:  fmt.Sprintf("$%.2f", amount),
-			},
-		)
+		}, &discordgo.MessageEmbedField{
+			Name:   "Amount in USD",
+			Inline: true,
+			Value:  fmt.Sprintf("$%.2f", amount),
+		})
 	default:
 		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
 		return
 	}
 
-	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
-	}); err != nil {
-		log.Printf("Failed to send response: %v", err)
-	}
+	sendEmbedResponse(s, i.Interaction, embed)
 }
 
 func handleRobuxCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -161,40 +128,28 @@ func handleRobuxCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	currency := options[0].StringValue()
 	amount := options[1].FloatValue()
-
-	var robuxAmount int64
 	botUser := s.State.User
-	embed := &discordgo.MessageEmbed{
-		Title: "Robux Calculation",
-		Color: 0x5f9ea9,
-		Footer: &discordgo.MessageEmbedFooter{
-			Text:    fmt.Sprint("Powered by ", botUser.Username),
-			IconURL: botUser.AvatarURL("2048"),
-		},
-	}
 
+	embed := createEmbed("Robux Calculation", "", botUser)
 	switch currency {
 	case "GBP":
-		robuxAmount = int64(amount / PricePerRobux[BT])
-		embed.Description = fmt.Sprintf("£%.2f can buy %d Robux (approx. $%.2f)", amount, robuxAmount, ConvertGBPToUSD(amount))
+		robuxAmount := int64(amount / PricePerRobux[BT])
+		// £4.50 affords 1000 R$ ($??.??)
+		embed.Description = fmt.Sprintf("£%.2f affords %d R$ ($%.2f)", amount, robuxAmount, ConvertGBPToUSD(amount))
+
 	case "USD":
 		gbpAmount := ConvertUSDToGBP(amount)
-		robuxAmount = int64(gbpAmount / PricePerRobux[BT])
-		embed.Description = fmt.Sprintf("$%.2f can buy %d Robux (approx. £%.2f)", amount, robuxAmount, gbpAmount)
+		robuxAmount := int64(gbpAmount / PricePerRobux[BT])
+		embed.Description = fmt.Sprintf("$%.2f affords %d R$ (£%.2f)", amount, robuxAmount, gbpAmount)
+
 	default:
 		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
 		return
 	}
 
-	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
-	}); err != nil {
-		log.Printf("Failed to send response: %v", err)
-	}
+	sendEmbedResponse(s, i.Interaction, embed)
 }
 
-// ParseCommandOptions extracts PriceType and amount from interaction options
 func ParseCommandOptions(options []*discordgo.ApplicationCommandInteractionDataOption) (PriceType, int64, error) {
 	if len(options) < 2 {
 		return "", 0, fmt.Errorf("insufficient command options")
@@ -213,6 +168,37 @@ func parseAmount(value interface{}) (int64, error) {
 		return int64(math.Round(v)), nil
 	default:
 		return 0, fmt.Errorf("unexpected type %T for amount", value)
+	}
+}
+
+// calculateGamepassPrice calculates the gamepass price based on the price type and amount
+func calculateGamepassPrice(priceType PriceType, amount int64) int64 {
+	if priceType == AT {
+		return int64(math.Round(float64(amount)/(1-MarkupRate))) + 1
+	}
+	return amount
+}
+
+// createEmbed creates a Discord embed message
+func createEmbed(title, description string, botUser *discordgo.User) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		Color:       0x5f9ea9,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    fmt.Sprint("Powered by ", botUser.Username),
+			IconURL: botUser.AvatarURL("2048"),
+		},
+	}
+}
+
+// sendEmbedResponse sends an embed response to the interaction
+func sendEmbedResponse(s *discordgo.Session, interaction *discordgo.Interaction, embed *discordgo.MessageEmbed) {
+	if err := s.InteractionRespond(interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
+	}); err != nil {
+		log.Printf("Failed to send response: %v", err)
 	}
 }
 
