@@ -1,19 +1,18 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
 	"os"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/go-resty/resty/v2"
 )
 
 // Constants
 const (
-	MarkupRate = 0.30 // 30% markup for 'a/t' type
+	ExchangeRate = 1.22 // GBP to USD exchange rate
+	MarkupRate   = 0.30 // 30% markup for 'a/t' type
 )
 
 // PriceType represents the type of Robux price calculation
@@ -30,64 +29,14 @@ var PricePerRobux = map[PriceType]float64{
 	AT: 0.00675, // GBP per Robux for 'a/t'
 }
 
-// FetchExchangeRate fetches the exchange rate from ExchangeRate-API
-func FetchExchangeRate(from, to string) (float64, error) {
-	apiKey := os.Getenv("EXCHANGE_RATE_API_KEY")
-	if apiKey == "" {
-		return 0, fmt.Errorf("EXCHANGE_RATE_API_KEY environment variable is required")
-	}
-
-	client := resty.New()
-	resp, err := client.R().
-		SetQueryParams(map[string]string{
-			"apikey":  apiKey,
-			"base":    from,
-			"symbols": to,
-		}).
-		Get("https://api.exchangerate-api.com/v4/latest/" + from)
-
-	if err != nil {
-		return 0, fmt.Errorf("failed to fetch exchange rate: %w", err)
-	}
-
-	if resp.StatusCode() != 200 {
-		return 0, fmt.Errorf("received non-200 response: %s", resp.Status())
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	rates, ok := result["rates"].(map[string]interface{})
-	if !ok {
-		return 0, fmt.Errorf("invalid response format")
-	}
-
-	rate, ok := rates[to].(float64)
-	if !ok {
-		return 0, fmt.Errorf("exchange rate not found for %s to %s", from, to)
-	}
-
-	return rate, nil
-}
-
 // ConvertGBPToUSD converts GBP to USD using the exchange rate
-func ConvertGBPToUSD(gbp float64) (float64, error) {
-	rate, err := FetchExchangeRate("GBP", "USD")
-	if err != nil {
-		return 0, err
-	}
-	return gbp * rate, nil
+func ConvertGBPToUSD(gbp float64) float64 {
+	return gbp * ExchangeRate
 }
 
 // ConvertUSDToGBP converts USD to GBP using the exchange rate
-func ConvertUSDToGBP(usd float64) (float64, error) {
-	rate, err := FetchExchangeRate("USD", "GBP")
-	if err != nil {
-		return 0, err
-	}
-	return usd / rate, nil
+func ConvertUSDToGBP(usd float64) float64 {
+	return usd / ExchangeRate
 }
 
 // HandleInteraction processes Discord slash commands concurrently
@@ -107,14 +56,12 @@ func HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func handlePriceCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	priceType, amount, err := ParseCommandOptions(i.ApplicationCommandData().Options)
 	if err != nil {
-		log.Printf("Error parsing command options: %v", err)
 		RespondWithError(s, i.Interaction, fmt.Sprintf("Error: %v", err))
 		return
 	}
 
 	rate, exists := PricePerRobux[priceType]
 	if !exists {
-		log.Printf("Invalid price type: %s", priceType)
 		RespondWithError(s, i.Interaction, "Invalid type. Use 'b/t' or 'a/t'.")
 		return
 	}
@@ -123,18 +70,11 @@ func handlePriceCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gamepassPrice := calculateGamepassPrice(priceType, amount)
 	botUser := s.State.User
 
-	usdAmount, err := ConvertGBPToUSD(gbpAmount)
-	if err != nil {
-		log.Printf("Error converting GBP to USD: %v", err)
-		RespondWithError(s, i.Interaction, fmt.Sprintf("Error converting GBP to USD: %v", err))
-		return
-	}
-
 	embed := createEmbed("Price Calculation", fmt.Sprintf("**Conversion Type:** %s\n**Amount of Robux:** %d", priceType, amount), botUser)
 	embed.Fields = []*discordgo.MessageEmbedField{
 		{Name: "Gamepass Price", Value: fmt.Sprintf("%d R$", gamepassPrice), Inline: true},
 		{Name: "Amount in GBP", Value: fmt.Sprintf("£%.2f", gbpAmount), Inline: true},
-		{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", usdAmount), Inline: true},
+		{Name: "Amount in USD", Value: fmt.Sprintf("$%.2f", ConvertGBPToUSD(gbpAmount)), Inline: true},
 	}
 
 	sendEmbedResponse(s, i.Interaction, embed)
@@ -142,9 +82,9 @@ func handlePriceCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 func handleHelpCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	embed := createEmbed("Available Commands", "Here are the available commands and their usage:\n"+
-		"/price: Calculate the price in GBP and USD for a given amount of Robux\n"+
-		"/convert: Convert between GBP and USD\n"+
-		"/robux: Convert GBP or USD to the amount of Robux", s.State.User)
+		"`/price`: Calculate the price in GBP and USD for a given amount of Robux\n"+
+		"`/convert`: Convert between GBP and USD\n"+
+		"`/robux`: Convert GBP or USD to the amount of Robux", s.State.User)
 
 	sendEphemeralEmbedResponse(s, i.Interaction, embed)
 }
@@ -163,11 +103,7 @@ func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 	embed := createEmbed("Currency Conversion", "", botUser)
 	switch currency {
 	case "GBP":
-		usdAmount, err := ConvertGBPToUSD(amount)
-		if err != nil {
-			RespondWithError(s, i.Interaction, fmt.Sprintf("Error converting GBP to USD: %v", err))
-			return
-		}
+		convertedAmount := ConvertGBPToUSD(amount)
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "Amount in GBP",
 			Inline: true,
@@ -175,14 +111,10 @@ func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		}, &discordgo.MessageEmbedField{
 			Name:   "Amount in USD",
 			Inline: true,
-			Value:  fmt.Sprintf("$%.2f", usdAmount),
+			Value:  fmt.Sprintf("$%.2f", convertedAmount),
 		})
 	case "USD":
-		gbpAmount, err := ConvertUSDToGBP(amount)
-		if err != nil {
-			RespondWithError(s, i.Interaction, fmt.Sprintf("Error converting USD to GBP: %v", err))
-			return
-		}
+		convertedAmount := ConvertUSDToGBP(amount)
 		embed.Fields = append(embed.Fields,
 			&discordgo.MessageEmbedField{
 				Name:   "Amount in USD",
@@ -192,7 +124,7 @@ func handleConvertCommand(s *discordgo.Session, i *discordgo.InteractionCreate) 
 			&discordgo.MessageEmbedField{
 				Name:   "Amount in GBP",
 				Inline: true,
-				Value:  fmt.Sprintf("£%.2f", gbpAmount),
+				Value:  fmt.Sprintf("£%.2f", convertedAmount),
 			})
 	default:
 		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
@@ -216,19 +148,14 @@ func handleRobuxCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	embed := createEmbed("Robux Calculation", "", botUser)
 	switch currency {
 	case "GBP":
-		usdAmount, err := ConvertGBPToUSD(amount)
-		if err != nil {
-			RespondWithError(s, i.Interaction, fmt.Sprintf("Error converting GBP to USD: %v", err))
-			return
-		}
-		embed.Description = fmt.Sprintf("£%.2f affords %d R$ ($%.2f)", amount, int64(amount/PricePerRobux[BT]), usdAmount)
+		robuxAmount := int64(amount / PricePerRobux[BT])
+		embed.Description = fmt.Sprintf("£%.2f affords %d R$ ($%.2f)", amount, robuxAmount, ConvertGBPToUSD(amount))
+
 	case "USD":
-		gbpAmount, err := ConvertUSDToGBP(amount)
-		if err != nil {
-			RespondWithError(s, i.Interaction, fmt.Sprintf("Error converting USD to GBP: %v", err))
-			return
-		}
-		embed.Description = fmt.Sprintf("$%.2f affords %d R$ (£%.2f)", amount, int64(gbpAmount/PricePerRobux[BT]), gbpAmount)
+		gbpAmount := ConvertUSDToGBP(amount)
+		robuxAmount := int64(gbpAmount / PricePerRobux[BT])
+		embed.Description = fmt.Sprintf("$%.2f affords %d R$ (£%.2f)", amount, robuxAmount, gbpAmount)
+
 	default:
 		RespondWithError(s, i.Interaction, "Invalid currency. Use 'GBP' or 'USD'.")
 		return
@@ -314,8 +241,6 @@ func RespondWithError(s *discordgo.Session, interaction *discordgo.Interaction, 
 
 // main initializes the bot, registers commands, and starts listening
 func main() {
-	// Load environment variables from .env file
-
 	token := os.Getenv("DISCORD_TOKEN")
 	if token == "" {
 		log.Fatal("DISCORD_TOKEN environment variable is required")
@@ -417,7 +342,8 @@ func RegisterSlashCommands(dg *discordgo.Session) error {
 	}
 
 	for _, cmd := range commands {
-		if _, err := dg.ApplicationCommandCreate(dg.State.User.ID, "", cmd); err != nil {
+		_, err := dg.ApplicationCommandCreate(dg.State.User.ID, "", cmd)
+		if err != nil {
 			return err
 		}
 	}
