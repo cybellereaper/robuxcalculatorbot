@@ -25,8 +25,8 @@ const (
 
 // PricePerRobux maps PriceType to GBP per Robux
 var PricePerRobux = map[PriceType]float64{
-	BT: 0.0045,  // GBP per Robux for 'b/t'
-	AT: 0.00675, // GBP per Robux for 'a/t'
+	BT: 0.00369, // GBP per Robux for 'b/t'
+	AT: 0.0053,  // GBP per Robux for 'a/t'
 }
 
 // ConvertGBPToUSD converts GBP to USD using the exchange rate
