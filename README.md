@@ -1,43 +1,17 @@
-Robux Price Calculator Bot
+# RobuxCalculatorBot.rs
 
-This is a Discord bot designed to calculate the price of Robux in GBP and USD.
+This is a Rust project that includes a Discord bot with several commands. The bot can display available commands, calculate the price of Robux in GBP and USD, and convert between GBP and USD.
 
-Features:
+## Features
 
-- Calculate Robux prices in GBP and USD with the /price command.
-- Supports two pricing types: b/t and a/t.
+- **Help Command**: Displays the available commands and their usage.
+- **Price Command**: Calculates the price in GBP and USD for a given amount of Robux.
+- **Convert Command**: Converts between GBP and USD.
 
-Prerequisites:
+## Prerequisites
 
-- Go (installation guide: https://golang.org/doc/install)
-- Git (installation guide: https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
-- Discord account (for obtaining a bot token)
+- [Rust](https://www.rust-lang.org/tools/install)
+- [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+- [Discord API Token](https://discord.com/developers/applications)
+- [Guild ID](https://discord.com/developers/docs/resources/guild)
 
-Setup Instructions:
-
-1. Clone the repository:
-   git clone https://github.com/your-username/your-repository.git
-   cd your-repository
-
-2. Install dependencies:
-   go mod tidy
-
-3. Create a .env file with the following content:
-   DISCORD_TOKEN=your-discord-bot-token
-
-4. Run the bot:
-   go run main.go
-
-Commands:
-
-- /price
-
-Options:
-
-- type (required): Select either b/t or a/t.
-- amount (required): Specify the amount of Robux.
-
-Example Usage:
-
-To calculate the price of 100 Robux with the b/t pricing type, use the command:
-   /price type:b/t amount:100
